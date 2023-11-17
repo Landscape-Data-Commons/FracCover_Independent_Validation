@@ -1,4 +1,5 @@
 # SELECTING AN SPATIALLY BALANCED SAMPLE FOR FRACTIONAL COVER MODEL VALIDATION #
+# 2023-11-17
 
 # This will produce a spatially-balanced sampling design made of a subset of the
 # available BLM AIM and LMF points from years in which at least 100 points were
