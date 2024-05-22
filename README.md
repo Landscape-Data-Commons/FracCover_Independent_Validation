@@ -6,3 +6,7 @@ This code will draw a spatially-balanced sample from the AIM and LMF points samp
 
 ## Output
 The sample draw is available in the output folder (most easily accessible as [a ZIP file](https://github.com/Landscape-Data-Commons/FracCover_Independent_Validation/blob/main/output/model_validation_points_20131113.zip) and consists of a geodatabase with a feature class containing the points selected. You can reproduce the draw using the code and source data.
+
+
+# NRI
+The same methods were implimented to select a reserve 10% of NRCS NRI field plots sampled up to 2022. These points and the associated code are available [here](https://github.com/Landscape-Data-Commons/FracCover_Independent_Validation_NRI). 
