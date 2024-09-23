@@ -1,5 +1,5 @@
 # SELECTING AN SPATIALLY BALANCED SAMPLE FOR FRACTIONAL COVER MODEL VALIDATION #
-# 2023-11-17
+# 2024-09-23
 
 # This will produce a spatially-balanced sampling design made of a subset of the
 # available BLM AIM and LMF points from years in which at least 100 points were
@@ -16,7 +16,7 @@ projection_aea <- sp::CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=
 # The path to the incoming data. This is necessary because some LMF data have
 # been ingested into a GDB but not added to the national database yet
 # Change this to a full path if data isn't a subfolder in your working directory
-data_path <- "data"
+data_path <- "~/Projects/AIM/Data/LMF2023Ingest.gdb/"
 
 # The path to write the sampling design to once this is all complete
 # Change this to a full path if output isn't a subfolder in your working
@@ -26,51 +26,37 @@ output_path <- "output"
 
 #### DATA ######################################################################
 # First, read in the LMF points which are in the GDB
-lmf_points_2022 <- sf::st_read(dsn = paste0(data_path, "/",
-                                            "LMF2022Ingest.gdb"),
-                               layer = "POINTCOORDINATES")
+lmf_points_2023 <- sf::st_read(dsn = paste0(data_path),
+                               layer = "LMF") |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
 
 # Adding in variables that are present in the rest of the points' attributes
 # The year is important because it'll be used to stratify the sampling design
 # and the ProjectKey is important because only points associated with BLM_AIM
 # should be considered for the sampling design
-lmf_points_2022[["year"]] <- "2022"
-lmf_points_2022[["ProjectKey"]] <- "BLM_AIM"
+lmf_points_2023[["year"]] <- "2023"
 
 # This uses the package trex (https://github.com/landscape-data-commons/trex)
 # to access the Landscape Data Commons and download the coordinates for all
 # points in the database
-all_other_aim_lmf_points_headers <-  trex::fetch_ldc(data_type = "header",
-                                                     timeout = 60,
-                                                     take = 10000,
-                                                     delay = 500,
-                                                     verbose = TRUE)
+all_other_lmf <- sf::st_read(dsn = "~/Projects/AIM/Data/AIMTerrestrialEdtBackup2-16-24/AIMTerrestrialEdtBackup2-16-24.gdb/",
+                             layer = "LMF" ) |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
 
-# The points are in tabular format and need to be converted into an sf object
-all_other_aim_lmf_points <- sf::st_as_sf(x = all_other_aim_lmf_points_headers,
-                                         coords = c("Longitude_NAD83",
-                                                    "Latitude_NAD83"),
-                                         crs = "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs +type=crs")
+all_other_aim <- sf::st_read(dsn = "~/Projects/AIM/Data/AIMTerrestrialEdtBackup2-16-24/AIMTerrestrialEdtBackup2-16-24.gdb/",
+                             layer = "TerrADat") |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
+
+
+# Combine the all datasets objects into a single set of points and make sure that the
+# CRS is appropriate for spsurvey::grts()
+all_points <- sf::st_transform(dplyr::bind_rows(all_other_lmf,all_other_aim,
+                                                lmf_points_2023),
+                               crs = projection_aea)
 
 # Again, the sampling design needs to be stratified by year
 # This will extract the year from the DateVisited variable
-all_other_aim_lmf_points[["year"]] <- stringr::str_extract(string = all_other_aim_lmf_points$DateVisited,
-                                                                      pattern = "^20\\d{2}")
+all_points <- all_points |>
+  dplyr::mutate(DateVisited = as.POSIXct(DateVisited, format = "%Y/%m/%d %H:%M", tz = "UTC")) |>
+  dplyr::mutate(YearVisited = lubridate::year(DateVisited))|> subset(YearVisited==2023)
 
-# Combine the two sf objects into a single set of points and make sure that the
-# CRS is appropriate for spsurvey::grts()
-all_points <- sf::st_transform(dplyr::bind_rows(all_other_aim_lmf_points,
-                                                lmf_points_2022),
-                               crs = projection_aea)
-
-# Filter the points down to only those which have an associated year (some may
-# have had malformed dates) and the ProjectKey "BLM_AIM" then keep only the
-# variables PrimaryKey (the unique identifier) and year.
-all_points <- dplyr::select(.data = dplyr::filter(.data = all_points,
-                                                  !is.na(year),
-                                                  ProjectKey == "BLM_AIM"),
-                                                  PrimaryKey,
-                                                  year)
 
 #### DESIGN ####################################################################
 # spsurvey::grts() takes a named vector of sample sizes where the names
@@ -80,11 +66,11 @@ all_points <- dplyr::select(.data = dplyr::filter(.data = all_points,
 # The easiest way to get this is to use table() which will provide a named count
 # of points associated with each value in the variable year then multiply those
 # counts by 0.1 to get the desired sample sizes
-sample_size_vector <- ceiling(table(all_points$year) * 0.1)
+sample_size_vector <- ceiling(table(all_points$YearVisited) * 0.1)
 
 # Only years in which there were at least 100 points sampled should be included
 # in the sampling design
-sample_size_vector <- sample_size_vector[table(all_points$year) >= 100]
+sample_size_vector <- sample_size_vector[table(all_points$YearVisited) >= 100]
 
 # Set a seed numebr so that this is reproducible
 set.seed(46290)
@@ -94,19 +80,27 @@ set.seed(46290)
 # Because this isn't a design in which there might be later rejections, only
 # "base" points are being drawn
 sample <- spsurvey::grts(sframe = dplyr::filter(all_points,
-                                                year %in% names(sample_size_vector)),
+                                                YearVisited %in% names(sample_size_vector)),
                          n_base = sample_size_vector,
-                         stratum_var = "year")
+                         stratum_var = "YearVisited")
+
+# Add in the other NRI points
+old_aim <- sf::st_read("output/validation_sample_points.shp") |>
+ dplyr::mutate(YearVisited = as.numeric(year))
+
+sample_points <- dplyr::bind_rows(dplyr::select(.data = sample$sites_base,
+                                                PrimaryKey,
+                                                YearVisited),
+                                  dplyr::select(.data = old_aim,
+                                                PrimaryKey,
+                                                YearVisited))
+
 
 #### WRITING ###################################################################
 # Write the sample out to a usable format, in this case an ESRI shapefile,
 # making sure that the sample points are in the same projection that the input
 # points.
-sf::st_write(obj = sf::st_transform(x = dplyr::select(.data = sample$sites_base,
-                                                      PrimaryKey,
-                                                      year),
-                                    crs = sf::st_crs(lmf_points_2022)),
-             dsn = output_path,
-             layer = "validation_sample_points",
-             driver = "ESRI shapefile",
-             append = FALSE)
+write.csv(sample_points,
+          paste0("output/AIM_reserve_validataion_", Sys.Date(), ".csv"),
+          row.names = F)
+
