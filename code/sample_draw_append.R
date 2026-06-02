@@ -75,7 +75,7 @@ sample <- spsurvey::grts(sframe = dplyr::filter(all_points_sample,
                          stratum_var = "YearVisited")
 
 # Add in the validation points from previous samples
-old_aim <- sf::st_read("output/AIM_reserve_validation_2026-01-29.csv") |>
+old_aim <- sf::st_read("output/AIM_reserve_validation_2026-05-04.csv") |>
  dplyr::mutate(YearVisited = as.numeric(YearVisited))
 
 sample_points <- dplyr::bind_rows(dplyr::select(.data = sample$sites_base,
