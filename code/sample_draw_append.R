@@ -1,5 +1,5 @@
 # SELECTING AN SPATIALLY BALANCED SAMPLE FOR FRACTIONAL COVER MODEL VALIDATION #
-# 2026-05-04
+# 2026-11-20
 
 # This will produce a spatially-balanced sampling design made of a subset of the
 # available BLM AIM and LMF points from years in which at least 100 points were
@@ -16,7 +16,7 @@ projection_aea <- sp::CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=
 # The path to the incoming data. This is necessary because some LMF data have
 # been ingested into a GDB but not added to the national database yet
 # Change this to a full path if data isn't a subfolder in your working directory
-data_path <- "~/Projects/AIM/Data/AIM_Terrestrial_Pub_4-8-26.gdb/AIM_Terrestrial_Pub_4-8-26.gdb"
+data_path <- "~/Projects/AIM/Data/LMF2025Ingest.gdb/LMF2025Ingest.gdb"
 
 # The path to write the sampling design to once this is all complete
 # Change this to a full path if output isn't a subfolder in your working
@@ -29,16 +29,19 @@ output_path <- "output"
 # This uses the package trex (https://github.com/landscape-data-commons/trex)
 # to access the Landscape Data Commons and download the coordinates for all
 # points in the database
-all_other_lmf <- sf::st_read(dsn = data_path,
-                             layer = "AIM_TerrestrialLMF__I_Indicators" ) |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
+# all_other_lmf <- sf::st_read(dsn = data_path,
+#                              layer = "AIM_TerrestrialLMF__I_Indicators" ) |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
+#
+# all_other_aim <- sf::st_read(dsn = data_path,
+#                              layer = "AIM_TerrestrialTerradat__I_Indicators") |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
 
-all_other_aim <- sf::st_read(dsn = data_path,
-                             layer = "AIM_TerrestrialTerradat__I_Indicators") |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
+all_points <- sf::st_read(dsn = data_path,
+                          layer = "AIM_TerrestrialLMF__I_Indicators" ) |> dplyr::select(PrimaryKey, Latitude_NAD83, Longitude_NAD83, DateVisited)
 
 
 # Combine the all datasets objects into a single set of points and make sure that the
 # CRS is appropriate for spsurvey::grts()
-all_points <- sf::st_transform(dplyr::bind_rows(all_other_lmf,all_other_aim),
+all_points <- sf::st_transform(all_points,
                                crs = projection_aea)
 
 # Again, the sampling design needs to be stratified by year
@@ -75,7 +78,7 @@ sample <- spsurvey::grts(sframe = dplyr::filter(all_points_sample,
                          stratum_var = "YearVisited")
 
 # Add in the validation points from previous samples
-old_aim <- sf::st_read("output/AIM_reserve_validation_2026-05-04.csv") |>
+old_aim <- sf::st_read("output/AIM_reserve_validation_2026-06-02.csv") |>
  dplyr::mutate(YearVisited = as.numeric(YearVisited))
 
 sample_points <- dplyr::bind_rows(dplyr::select(.data = sample$sites_base,
@@ -91,7 +94,7 @@ sample_points <- dplyr::left_join(sample_points, all_points |>
 
 
 #### WRITING ###################################################################
-# Write the sample out to a usable format, in this case an ESRI shapefile,
+# Write the sample out to a usable format, in this case a csv,
 # making sure that the sample points are in the same projection that the input
 # points.
 write.csv(sample_points,
